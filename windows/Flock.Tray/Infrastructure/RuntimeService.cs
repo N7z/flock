@@ -181,15 +181,15 @@ public sealed class RuntimeService
     }
 
     /// <summary>Restarts the daemon and its services (<c>flock restart</c>); also starts a stopped daemon.</summary>
-    public Task RestartAsync() => RunLifecycleAsync("restart", busy => IsRestarting = busy);
+    public Task RestartAsync() => RunLifecycleAsync("restart", busy => IsRestarting = busy, stops: false);
 
     /// <summary>
     ///     Stops the daemon and its services (<c>flock stop</c>) until Start Flock, or the next sign-in: the scheduled
     ///     task stays as it is.
     /// </summary>
-    public Task StopAsync() => RunLifecycleAsync("stop", busy => IsStopping = busy);
+    public Task StopAsync() => RunLifecycleAsync("stop", busy => IsStopping = busy, stops: true);
 
-    private async Task RunLifecycleAsync(string command, Action<bool> setBusy)
+    private async Task RunLifecycleAsync(string command, Action<bool> setBusy, bool stops)
     {
         if (operations.IsRunning("lifecycle"))
         {
@@ -211,12 +211,19 @@ public sealed class RuntimeService
             OperationOutcome.Succeeded => null,
             _ => ActionError,
         };
-        setBusy(false);
-        NotifyChanged();
-        if (outcome is OperationOutcome.Succeeded or OperationOutcome.Failed)
+        if (stops && outcome is OperationOutcome.Succeeded)
+        {
+            // Stopped for sure: show it now. Reading the status of a daemon that just stopped takes
+            // Windows seconds to fail, and the stale status would show Stop and Restart meanwhile.
+            Status = null;
+            Error = null;
+        }
+        else if (outcome is OperationOutcome.Succeeded or OperationOutcome.Failed)
         {
             await RefreshAsync();
         }
+        setBusy(false);
+        NotifyChanged();
     }
 
     public ShellLaunchResult Open(string target) => ReportShellResult(shell.Open(target));
