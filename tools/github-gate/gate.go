@@ -38,7 +38,6 @@ func RunPRGate(api GitHub, owner, repository string, event PullRequestEvent) err
 			return nil
 		}
 
-		issues := approvedIssues(api, owner, pr)
 		if pr.State == "closed" {
 			if !event.BodyEdited || pr.Merged || pr.Base.Ref != "main" {
 				return nil
