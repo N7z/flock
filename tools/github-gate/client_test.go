@@ -29,7 +29,9 @@ func TestClientReadsAndWritesGitHubResources(t *testing.T) {
 		case "GET /repos/flock-php/flock/issues/73":
 			_, _ = io.WriteString(w, `{"number":73,"state":"open","labels":[{"name":"help wanted"}]}`)
 		case "GET /repos/flock-php/flock/issues/87/comments":
-			_, _ = io.WriteString(w, `[{"user":{"login":"github-actions[bot]"},"body":"<!-- pr-gate:closed -->"}]`)
+			_, _ = io.WriteString(w, `[{"user":{"login":"github-actions[bot]"},"body":"<!-- pr-gate:closed -->","created_at":"2026-01-01T00:00:00Z"}]`)
+		case "GET /repos/flock-php/flock/issues/87/events":
+			_, _ = io.WriteString(w, `[{"event":"closed","actor":{"login":"github-actions[bot]"},"created_at":"2026-01-01T00:00:01Z"}]`)
 		case "POST /repos/flock-php/flock/issues/87/comments", "PATCH /repos/flock-php/flock/pulls/87", "POST /repos/flock-php/flock/issues/73/labels":
 			body, _ := io.ReadAll(r.Body)
 			writes = append(writes, r.Method+" "+r.URL.Path+" "+string(body))
@@ -74,6 +76,56 @@ func TestClientReadsAndWritesGitHubResources(t *testing.T) {
 
 	if got := strings.Join(writes, "\n"); !strings.Contains(got, `{"body":"hello"}`) || !strings.Contains(got, `{"state":"closed"}`) || !strings.Contains(got, `{"labels":["needs triage"]}`) {
 		t.Fatalf("writes = %s", got)
+	}
+}
+
+func TestClientGateClosedUsesLatestClosureAndMarker(t *testing.T) {
+	tests := []struct {
+		name        string
+		commentTime string
+		events      string
+		want        bool
+	}{
+		{
+			name:        "gate closed after the latest reopen",
+			commentTime: "2026-01-02T00:00:00Z",
+			events:      `[{"event":"reopened","actor":{"login":"contributor"},"created_at":"2026-01-01T00:00:00Z"},{"event":"closed","actor":{"login":"github-actions[bot]"},"created_at":"2026-01-02T00:00:01Z"}]`,
+			want:        true,
+		},
+		{
+			name:        "manual closure after a gate reopen",
+			commentTime: "2026-01-01T00:00:00Z",
+			events:      `[{"event":"closed","actor":{"login":"github-actions[bot]"},"created_at":"2026-01-01T00:00:01Z"},{"event":"reopened","actor":{"login":"contributor"},"created_at":"2026-01-02T00:00:00Z"},{"event":"closed","actor":{"login":"maintainer"},"created_at":"2026-01-03T00:00:00Z"}]`,
+			want:        false,
+		},
+		{
+			name:        "bot closure without a fresh marker",
+			commentTime: "2026-01-01T00:00:00Z",
+			events:      `[{"event":"closed","actor":{"login":"github-actions[bot]"},"created_at":"2026-01-01T00:00:01Z"},{"event":"reopened","actor":{"login":"contributor"},"created_at":"2026-01-02T00:00:00Z"},{"event":"closed","actor":{"login":"github-actions[bot]"},"created_at":"2026-01-03T00:00:00Z"}]`,
+			want:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/repos/flock-php/flock/issues/87/comments":
+					_, _ = io.WriteString(w, `[{"user":{"login":"github-actions[bot]"},"body":"<!-- pr-gate:closed -->","created_at":"`+tt.commentTime+`"}]`)
+				case "/repos/flock-php/flock/issues/87/events":
+					_, _ = io.WriteString(w, tt.events)
+				default:
+					t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+
+			closed, err := NewClient(server.URL, "token").GateClosed("flock-php", "flock", 87)
+			if err != nil || closed != tt.want {
+				t.Fatalf("GateClosed() = %t, %v; want %t", closed, err, tt.want)
+			}
+		})
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const gateMarker = "<!-- pr-gate:closed -->"
@@ -65,25 +66,66 @@ func (c *Client) Issue(owner, repository string, number int) (Issue, error) {
 
 func (c *Client) GateClosed(owner, repository string, number int) (bool, error) {
 	type comment struct {
-		User User   `json:"user"`
-		Body string `json:"body"`
+		User      User      `json:"user"`
+		Body      string    `json:"body"`
+		CreatedAt time.Time `json:"created_at"`
 	}
-	path := fmt.Sprintf("/repos/%s/%s/issues/%d/comments", owner, repository, number)
+	commentsPath := fmt.Sprintf("/repos/%s/%s/issues/%d/comments", owner, repository, number)
+	var latestMarker time.Time
 	for page := 1; ; page++ {
 		var comments []comment
-		next, err := c.getPage(path, page, &comments)
+		next, err := c.getPage(commentsPath, page, &comments)
 		if err != nil {
 			return false, err
 		}
 		for _, comment := range comments {
-			if comment.User.Login == "github-actions[bot]" && strings.Contains(comment.Body, gateMarker) {
-				return true, nil
+			if comment.User.Login == "github-actions[bot]" && strings.Contains(comment.Body, gateMarker) && comment.CreatedAt.After(latestMarker) {
+				latestMarker = comment.CreatedAt
 			}
 		}
 		if !next {
-			return false, nil
+			break
 		}
 	}
+	if latestMarker.IsZero() {
+		return false, nil
+	}
+
+	type event struct {
+		Event     string    `json:"event"`
+		Actor     User      `json:"actor"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+	eventsPath := fmt.Sprintf("/repos/%s/%s/issues/%d/events", owner, repository, number)
+	var latestTransition event
+	var latestReopen time.Time
+	foundTransition := false
+	for page := 1; ; page++ {
+		var events []event
+		next, err := c.getPage(eventsPath, page, &events)
+		if err != nil {
+			return false, err
+		}
+		for _, current := range events {
+			if current.Event == "reopened" && current.CreatedAt.After(latestReopen) {
+				latestReopen = current.CreatedAt
+			}
+			if (current.Event == "closed" || current.Event == "reopened") &&
+				(!foundTransition || !current.CreatedAt.Before(latestTransition.CreatedAt)) {
+				latestTransition = current
+				foundTransition = true
+			}
+		}
+		if !next {
+			break
+		}
+	}
+
+	return foundTransition &&
+		latestTransition.Event == "closed" &&
+		latestTransition.Actor.Login == "github-actions[bot]" &&
+		!latestMarker.Before(latestReopen) &&
+		!latestMarker.After(latestTransition.CreatedAt), nil
 }
 
 func (c *Client) Comment(owner, repository string, number int, body string) error {
