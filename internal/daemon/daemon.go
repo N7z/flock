@@ -107,7 +107,12 @@ type daemon struct {
 	wildcard        wildcardState
 
 	defaults defaults // the first run's default PHP and Node.js
+
+	stop context.CancelFunc // ends Run (see Stop)
 }
+
+// Stop makes Run return: it stops every service, and the daemon exits with code 0.
+func (d *daemon) Stop() { d.stop() }
 
 func (d *daemon) shutdown() {
 	// First, while reloads still work: stopping a share reloads the web server.
@@ -279,7 +284,11 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
-	d := &daemon{root: cfg.Root, version: cfg.Version, startedAt: time.Now(), procs: supervisor.New(), leaves: certs.NewLeaves(), restarts: map[string]int{}}
+	// `flock stop` ends the daemon through the API (Stop), as a signal would.
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+
+	d := &daemon{root: cfg.Root, version: cfg.Version, startedAt: time.Now(), procs: supervisor.New(), leaves: certs.NewLeaves(), restarts: map[string]int{}, stop: stop}
 	defer d.shutdown()
 
 	d.binaries = binaries.NewCatalog(binaries.DefaultSource(cfg.Root), d.channel)

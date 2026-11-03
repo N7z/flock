@@ -253,6 +253,37 @@ func TestRefusesToStartTwice(t *testing.T) {
 	}
 }
 
+func TestStopEndsRun(t *testing.T) {
+	root, _ := testRoot(t, nil)
+
+	done := make(chan error, 1)
+	go func() { done <- Run(context.Background(), Config{Root: root, Version: "dev"}) }()
+	client := api.NewClient(paths.Socket(root))
+	deadline := time.Now().Add(5 * time.Second)
+	for _, err := client.Status(context.Background()); err != nil; _, err = client.Status(context.Background()) {
+		if time.Now().After(deadline) {
+			t.Fatal("daemon did not become ready")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if err := client.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		// nil: the Windows watchdog only restarts a daemon that exits with an error.
+		if err != nil {
+			t.Fatalf("Run returned %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("daemon did not stop")
+	}
+	if _, err := client.Status(context.Background()); !errors.Is(err, api.ErrDaemonNotRunning) {
+		t.Fatalf("want ErrDaemonNotRunning after stop, got %v", err)
+	}
+}
+
 func TestRemovesStaleSocket(t *testing.T) {
 	root, _ := testRoot(t, nil)
 	if err := os.WriteFile(paths.Socket(root), nil, 0o600); err != nil {

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"flock/internal/api"
 	"flock/internal/certs"
 	"flock/internal/dns"
 	"flock/internal/node"
@@ -166,7 +168,11 @@ func installService(root, bin string) error {
 
 	domain := "gui/" + strconv.Itoa(os.Getuid())
 	stopService(domain)
+	return bootstrapAgent(domain, path)
+}
 
+// bootstrapAgent loads the agent at path, which starts the daemon (RunAtLoad).
+func bootstrapAgent(domain, path string) error {
 	// bootout returns before launchd has fully released the job, so bootstrap can briefly fail with EIO.
 	var lastErr error
 	for range 20 {
@@ -485,6 +491,33 @@ func appDirs() []string {
 		filepath.Join(library, "WebKit", appBundleID),
 		filepath.Join(library, "Saved Application State", appBundleID+".savedState"),
 	}
+}
+
+// stopDaemon unloads the agent: launchd stops the daemon with SIGTERM, so its services shut down
+// cleanly, and no longer keeps it alive. The plist stays, so the daemon starts at the next login.
+func stopDaemon(context.Context, *api.Client, int) error {
+	if !serviceInstalled() {
+		return fmt.Errorf("the background daemon is not installed — run `flock install`")
+	}
+	stopService("gui/" + strconv.Itoa(os.Getuid()))
+	return nil
+}
+
+// startDaemon loads the agent again after `flock stop`.
+func startDaemon() error {
+	path, err := plistPath()
+	if err != nil {
+		return err
+	}
+	if !serviceInstalled() {
+		return fmt.Errorf("the background daemon is not installed — run `flock install`")
+	}
+	domain := "gui/" + strconv.Itoa(os.Getuid())
+	if exec.Command("launchctl", "print", domain+"/"+launchLabel).Run() == nil {
+		// Loaded already: KeepAlive restarts the daemon by itself.
+		return nil
+	}
+	return bootstrapAgent(domain, path)
 }
 
 // restartService makes launchd kill and relaunch the daemon.
