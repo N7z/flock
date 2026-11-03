@@ -7,11 +7,11 @@
 #     One that changes only docs/ skips the Go tests too, unless it goes into main, and one that
 #     changes docs/ gets the docs check (tools/docslint)
 #   - in the merge queue: everything, named with the version in .release-please-manifest.json. These
-#     are the checks that must pass before a PR (the release PR) is merged, and release.yml attaches
+#     are the checks that must pass before a PR (the release PR) is merged, and release-stable.yml attaches
 #     these very files to the release.
 #   - by hand from the Actions tab (any branch): unsigned, named dev-<commit>
-#   - from release.yml, only when it cannot find the merge queue's builds
-#   - from beta.yml, for a beta (named with its version, e.g. 1.1.0-beta.2)
+#   - from release-stable.yml, only when it cannot find the merge queue's builds
+#   - from release-beta.yml, for a beta (named with its version, e.g. 1.1.0-beta.2)
 name: Build
 
 on:
@@ -52,6 +52,7 @@ jobs:
                 env:
                     INPUT_VERSION: ${{ inputs.version }}
                     EVENT: ${{ github.event_name }}
+                #language=bash
                 run: |
                     if [ -n "$INPUT_VERSION" ]; then
                       version="$INPUT_VERSION"
@@ -69,7 +70,7 @@ jobs:
 
     # What a pull request changes: "code" unless it's only docs/, "docs" if any of docs/. Into main
     # it's always "code", so everything that's released has had the Go tests run on it.
-    # (With git, not the API: beta.yml and release.yml call this workflow with contents: read only.)
+    # (With git, not the API: release-beta.yml and release-stable.yml call this workflow with contents: read only.)
     changes:
         runs-on: ubuntu-latest
         outputs:
