@@ -40,11 +40,17 @@ func RunPRGate(api GitHub, owner, repository string, event PullRequestEvent) err
 
 		issues := approvedIssues(api, owner, pr)
 		if pr.State == "closed" {
+			if !event.BodyEdited || pr.Merged || pr.Base.Ref != "main" {
+				return nil
+			}
 			closedByGate, err := api.GateClosed(owner, repository, pr.Number)
 			if err != nil {
 				return err
 			}
-			if issue, approved := firstApprovedIssue(pr, issues); MayReopen(pr, event.BodyEdited, closedByGate, approved) {
+			if !closedByGate {
+				return nil
+			}
+			if issue, approved := firstApprovedIssue(api, owner, pr); MayReopen(pr, event.BodyEdited, closedByGate, approved) {
 				if err := api.SetPullRequestState(owner, repository, pr.Number, "open"); err != nil {
 					return err
 				}
@@ -60,7 +66,12 @@ func RunPRGate(api GitHub, owner, repository string, event PullRequestEvent) err
 		if err != nil {
 			return err
 		}
-		decision := EvaluatePullRequest(pr, permission, files, issues)
+		decision := EvaluatePullRequest(pr, permission, files, nil)
+		if decision.Action == CloseUnapproved {
+			if issue, approved := firstApprovedIssue(api, owner, pr); approved {
+				decision = Decision{Action: Allow, Issue: issue}
+			}
+		}
 		if decision.Action == Allow {
 			return nil
 		}
@@ -83,20 +94,10 @@ func RunIssueTriage(api GitHub, owner, repository string, issue Issue) error {
 	return api.AddLabel(owner, repository, issue.Number, "needs triage")
 }
 
-func approvedIssues(api GitHub, owner string, pr PullRequest) map[IssueReference]Issue {
-	issues := make(map[IssueReference]Issue)
+func firstApprovedIssue(api GitHub, owner string, pr PullRequest) (IssueReference, bool) {
 	for _, reference := range IssueReferences(pr.Body, "flock") {
 		issue, err := api.Issue(owner, reference.Repository, reference.Number)
-		if err == nil {
-			issues[reference] = issue
-		}
-	}
-	return issues
-}
-
-func firstApprovedIssue(pr PullRequest, issues map[IssueReference]Issue) (IssueReference, bool) {
-	for _, reference := range IssueReferences(pr.Body, "flock") {
-		if issue, ok := issues[reference]; ok && isApproved(issue, pr.User.Login) {
+		if err == nil && isApproved(issue, pr.User.Login) {
 			return reference, true
 		}
 	}
