@@ -101,7 +101,7 @@ Stop that program and run `flock restart`.
 Flock's daemon runs in the background, so your sites keep working when the app is closed. To free its memory when you're not working, stop it: every service (PHP, databases, mail, …) stops with it, and the databases shut down cleanly.
 
 :::app
-Click **Stop Daemon** in **Settings → General**. On Windows, **Stop** at the bottom of the Flock panel and **Stop Flock** in the tray icon's menu do the same. While Flock is stopped, Settings shows **Start Flock**, which starts it again.
+Click **Stop** at the bottom of the Flock panel, or **Stop Daemon** in **Settings → General**. On Windows and Linux, **Stop Flock** in the menu of Flock's icon does the same. While Flock is stopped, the panel and Settings show **Start Flock**, which starts it again.
 :::
 
 :::cli
