@@ -284,8 +284,8 @@ public sealed partial class App : Application
         // Before the setup there is nothing to open yet: Mail, Dumps, Logs and Settings all need the daemon.
         var running = State.IsRunning;
         List<string?> items = State.NeedsSetup
-            ? ["Set Up Flock…", null, "Quit Flock"]
-            : ["Open Flock", null, "Mail", "Dumps", "Logs", "Settings…", null, .. running ? new[] { "Restart Flock", "Stop Flock" } : ["Start Flock"], "Quit Flock"];
+            ? ["Set Up Flock…", null, "Quit Flock Tray"]
+            : ["Open Flock", null, "Mail", "Dumps", "Logs", "Settings…", null, .. running ? new[] { "Restart Flock", "Stop Flock" } : ["Start Flock"], "Quit Flock Tray"];
         if (update is not null)
         {
             items.Insert(1, update);

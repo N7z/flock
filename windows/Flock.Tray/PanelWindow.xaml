@@ -322,7 +322,7 @@
                                      ToolTipService.ToolTip="Stops Flock and every service until Start Flock or the next sign-in" />
                     <HyperlinkButton Content="Settings…" Command="{Binding OpenSettingsCommand}" Padding="4,2" />
                 </StackPanel>
-                <HyperlinkButton Grid.Column="1" Content="Quit Flock" Command="{Binding QuitCommand}" Padding="4,2" />
+                <HyperlinkButton Grid.Column="1" Content="Quit Flock Tray" Command="{Binding QuitCommand}" Padding="4,2" />
             </Grid>
         </StackPanel>
     </ScrollViewer>
