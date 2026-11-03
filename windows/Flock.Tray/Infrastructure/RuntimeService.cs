@@ -77,6 +77,7 @@ public sealed class RuntimeService
     public string? ActionError { get; private set; }
     public string? RuntimeError { get; private set; }
     public bool IsRestarting { get; private set; }
+    public bool IsStopping { get; private set; }
     public bool NeedsSetup { get; set; }
     public InstallLink? PendingInstall
     {
@@ -179,20 +180,29 @@ public sealed class RuntimeService
         NotifyChanged();
     }
 
-    public async Task RestartAsync()
+    /// <summary>Restarts the daemon and its services (<c>flock restart</c>); also starts a stopped daemon.</summary>
+    public Task RestartAsync() => RunLifecycleAsync("restart", busy => IsRestarting = busy);
+
+    /// <summary>
+    ///     Stops the daemon and its services (<c>flock stop</c>) until Start Flock, or the next sign-in: the scheduled
+    ///     task stays as it is.
+    /// </summary>
+    public Task StopAsync() => RunLifecycleAsync("stop", busy => IsStopping = busy);
+
+    private async Task RunLifecycleAsync(string command, Action<bool> setBusy)
     {
         if (operations.IsRunning("lifecycle"))
         {
             return;
         }
-        IsRestarting = true;
+        setBusy(true);
         NotifyChanged();
         var outcome = await operations.RunMutationAsync("lifecycle", operationErrors, async token =>
         {
-            var result = await processRunner.RunAsync(FlockPaths.FlockBinary, ["restart"], TimeSpan.FromMinutes(2), token);
+            var result = await processRunner.RunAsync(FlockPaths.FlockBinary, [command], TimeSpan.FromMinutes(2), token);
             if (!result.Succeeded)
             {
-                throw new FlockException(result.Output.Length == 0 ? $"Could not restart Flock ({FlockPaths.FlockBinary})." : result.Output);
+                throw new FlockException(result.Output.Length == 0 ? $"Could not {command} Flock ({FlockPaths.FlockBinary})." : result.Output);
             }
         }, CancellationToken.None);
         ActionError = outcome switch
@@ -201,7 +211,7 @@ public sealed class RuntimeService
             OperationOutcome.Succeeded => null,
             _ => ActionError,
         };
-        IsRestarting = false;
+        setBusy(false);
         NotifyChanged();
         if (outcome is OperationOutcome.Succeeded or OperationOutcome.Failed)
         {
