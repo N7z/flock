@@ -499,7 +499,12 @@ func stopDaemon(context.Context, *api.Client, int) error {
 	if !serviceInstalled() {
 		return fmt.Errorf("the background daemon is not installed — run `flock install`")
 	}
-	stopService("gui/" + strconv.Itoa(os.Getuid()))
+	domain := "gui/" + strconv.Itoa(os.Getuid())
+	stopService(domain)
+	// stopService gives up after ten seconds, with the agent maybe still loaded.
+	if exec.Command("launchctl", "print", domain+"/"+launchLabel).Run() == nil {
+		return fmt.Errorf("launchd did not unload %s, so the daemon may still be running — see `flock logs daemon`", launchLabel)
+	}
 	return nil
 }
 

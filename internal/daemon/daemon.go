@@ -51,6 +51,9 @@ type Config struct {
 // retryInterval is how often a degraded daemon tries to start what failed.
 var retryInterval = 15 * time.Second
 
+// apiShutdownTimeout is how long a stopping daemon lets API requests finish.
+var apiShutdownTimeout = 5 * time.Second
+
 // trustInBrowsers adds the CA to the browsers' own trust stores (Linux). Tests replace it: it
 // writes to the user's home.
 var trustInBrowsers = certs.TrustInBrowsers
@@ -400,10 +403,16 @@ loop:
 		}
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), apiShutdownTimeout)
 	defer cancel()
 
-	return apiServer.Shutdown(shutdownCtx)
+	if err := apiServer.Shutdown(shutdownCtx); !errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	// A request still running (an install) is cut off: returning an error would make the Windows
+	// watchdog start a daemon again that `flock stop` stopped.
+	_ = apiServer.Close()
+	return nil
 }
 
 // postgresExtensionFiles fingerprints the active PostgreSQL major's custom extensions folder, so

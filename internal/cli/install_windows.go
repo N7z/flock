@@ -549,6 +549,9 @@ func stopDaemon(ctx context.Context, client *api.Client, pid int) error {
 	}
 	stopDaemonProcess()
 	waitDaemonGone(root)
+	if daemonAnswers(root) {
+		return fmt.Errorf("the daemon could not be ended and is still running — see `flock logs daemon`")
+	}
 	return nil
 }
 
@@ -558,7 +561,7 @@ func waitProcessExit(root string, pid int, timeout time.Duration) bool {
 	if err != nil {
 		// Gone already, or not ours to wait for: then at least wait for the API to go.
 		waitDaemonGone(root)
-		return true
+		return !daemonAnswers(root)
 	}
 	defer windows.CloseHandle(p)
 	event, err := windows.WaitForSingleObject(p, uint32(timeout.Milliseconds()))
@@ -593,6 +596,16 @@ func waitDaemonGone(root string) {
 		}
 		_ = conn.Close()
 	}
+}
+
+// daemonAnswers reports whether a daemon still answers on the socket.
+func daemonAnswers(root string) bool {
+	conn, err := net.DialTimeout("unix", paths.Socket(root), 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }
 
 // privilegedFirst: `flock install` runs ensurePrivileged before it replaces anything, so declining
