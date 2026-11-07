@@ -38,6 +38,8 @@ type Config struct {
 	Channel string   `json:"channel,omitempty"`
 	Parked  []string `json:"parked"`
 	Sites   []Site   `json:"sites"`
+	// Proxies are names served by a server of their own, e.g. a Node.js dev server (see Proxy).
+	Proxies []Proxy `json:"proxies,omitempty"`
 
 	// Worktrees are the git worktrees Flock sets up (see package worktree). WorktreesSince is when
 	// Flock first looked for worktrees: older ones are served, but only set up when asked.
@@ -302,7 +304,8 @@ func (c *Config) NodeFor(s Site) string {
 }
 
 // AllSites returns linked sites plus every directory found in parked paths, and the git worktrees
-// of both (see worktreeSites). A linked site wins over a parked directory with the same name.
+// of both (see worktreeSites). A linked site wins over a parked directory with the same name, and
+// so does a proxy: the directory isn't a site then.
 // Sorted by name, so a site's worktrees follow it.
 func (c *Config) AllSites() []Site {
 	byName := map[string]Site{}
@@ -317,6 +320,9 @@ func (c *Config) AllSites() []Site {
 				continue
 			}
 			name := SiteName(e.Name())
+			if _, proxied := c.FindProxy(name); proxied {
+				continue
+			}
 			byName[name] = Site{Name: name, Path: filepath.Join(dir, e.Name()), Parked: true}
 		}
 	}
@@ -377,6 +383,9 @@ func siteForDir(sites []Site, dir string, pathOf func(Site) string) (Site, bool)
 func (c *Config) Upsert(site Site) error {
 	if site.IsWorktree() {
 		return fmt.Errorf("%s is a git worktree of %s and uses its settings — change them on %s", site.Name, site.Parent, site.Parent)
+	}
+	if _, ok := c.FindProxy(site.Name); ok {
+		return fmt.Errorf("%s is a proxy's name — remove it with `flock unproxy %s` first, or choose another name", site.Name, site.Name)
 	}
 	for i, s := range c.Sites {
 		if s.Name == site.Name {

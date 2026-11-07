@@ -68,6 +68,33 @@ flock link shop --php 8.4 --secure
 Remove a link with `flock unlink [name]`.
 :::
 
+## Proxying a local service
+
+Apps that aren't PHP, such as a Next.js, Nuxt or Vite dev server, an object store or a dashboard, run a server of their own on a port. A proxy passes a `.test` domain to that server, so the app gets a name, and HTTPS, like a site:
+
+:::app
+On macOS, click **Add Proxy…** in **Settings → Sites**, and give a name and the port (or host:port or URL). Proxies are listed under the sites, here and in the Flock panel, with what serves them (for example Node.js 22, when it's one of Flock's versions) or **Not running**; select one to turn on HTTPS, change its upstream or remove it.
+:::
+
+:::cli
+```bash
+flock proxy softpack 3000
+# proxied http://softpack.test → http://127.0.0.1:3000
+```
+
+A port means `127.0.0.1`; give a host and port (`localhost:5173`) or a URL (`https://127.0.0.1:8443`) for anything else. Proxying the name again changes its upstream.
+
+| Flag | Description |
+| --- | --- |
+| `--secure` | Serve it over HTTPS right away |
+
+`flock secure softpack` and `flock unsecure softpack` work on proxies too, `flock proxies` lists them with what serves them (or `not running`), and `flock unproxy softpack` removes one.
+:::
+
+Requests pass to the server with their `Host` header, so the app sees `softpack.test`, and WebSocket upgrades pass through too, so hot reload works. Some dev servers only answer the hosts they know: allow the domain in Vite's `server.allowedHosts`, or Next.js's `allowedDevOrigins`. Flock doesn't start the server, so start it as usual. Until it answers, the domain shows a page saying so, which switches to the app once it runs.
+
+A proxy's name can't be a linked site's: Flock refuses it. A folder of the same name in a project folder is served by the proxy instead, so `flock proxy softpack 3000` works for `~/Code/softpack`; `flock unproxy softpack` serves the folder again.
+
 ## Listing sites
 
 :::app
@@ -79,7 +106,7 @@ Remove a link with `flock unlink [name]`.
 flock sites
 ```
 
-This lists every linked and parked site with its PHP version, URL and path.
+This lists every linked and parked site with its PHP version, URL and path, and every proxy with its URL and upstream.
 :::
 
 ## Document root

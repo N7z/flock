@@ -7,7 +7,7 @@
 <p align="center">
   <strong>Local Laravel development, natively.</strong><br>
   .test domains with real HTTPS, a PHP version per project, databases in one click and every email caught.<br>
-  For macOS and Windows. No Docker, no virtual machine.
+  For macOS, Windows and Linux. No Docker, no virtual machine.
 </p>
 
 <p align="center">
@@ -18,13 +18,13 @@
 
 <p align="center">
   <a href="https://github.com/flock-php/flock/releases"><img src="https://img.shields.io/github/v/release/flock-php/flock?include_prereleases&sort=semver&style=flat-square" alt="Latest release"></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20L%CC%B6i%CC%B6n%CC%B6u%CC%B6x%CC%B6%20%28in%20roadmap%29-0D7A8C?style=flat-square" alt="macOS | Windows | Linux (on the roadmap)">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-0D7A8C?style=flat-square" alt="macOS | Windows | Linux">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square" alt="License: AGPL-3.0"></a>
 </p>
 
 https://github.com/user-attachments/assets/ac36d8eb-2522-4ad7-851b-052e74e759e7
 
-Flock runs PHP, Node.js, your databases and the web server as native processes, from a menu bar app on macOS and a tray app on Windows, or from the `flock` command line. It's free and open source, with no paid tier and no account.
+Flock runs PHP, Node.js, your databases and the web server as native processes, from a menu bar app on macOS, a tray app on Windows and a window with a top bar icon on Linux, or from the `flock` command line. It's free and open source, with no paid tier and no account.
 
 ## Documentation
 
@@ -34,7 +34,7 @@ The full documentation is at [flockphp.com/docs](https://flockphp.com/docs/quick
 
 - **.test domains with real HTTPS.** Park a folder, or link one project, and every app gets its own `.test` domain, subdomains included. HTTPS works without browser warnings.
 - **A PHP version per project.** PHP 8.1 to 8.5 run side by side, and each project picks its own. Node.js too.
-- **Databases in one click.** PostgreSQL, MySQL, MariaDB, MongoDB, Valkey, Meilisearch and RustFS (plus Redis and Typesense on macOS) run as native processes that start with your computer.
+- **Databases in one click.** PostgreSQL, MySQL, MariaDB, MongoDB, Valkey, Meilisearch and RustFS (plus Typesense on macOS and Linux, and Redis on macOS) run as native processes that start with your computer.
 - **Every email, caught.** Mail your apps send lands in a local inbox, one per app, and never reaches real people.
 - **`dump()` without the mess.** `dump()` and `dd()` output, queries, logs and views show up in a timeline grouped by request, with links to your editor. No code changes needed.
 - **Step debugging, only when you need it.** Xdebug slows every request, so it stays off until you turn it on.
@@ -81,13 +81,13 @@ Flock works with any PHP project, not only Laravel.
 
 Download the installer for your system from [flockphp.com/download](https://flockphp.com/download) or the [releases](https://github.com/flock-php/flock/releases), open Flock and click **Set up Flock**.
 
-| | macOS | Windows |
-| --- | --- | --- |
-| System | macOS 15 Sequoia or newer, Apple silicon | Windows 10 (2004) or 11, x64 |
-| Installer | `Flock-<version>-macOS.dmg` | `Flock-Setup-<version>-x64.exe` |
-| App | Menu bar | Notification area (tray) |
+| | macOS | Windows | Linux |
+| --- | --- | --- | --- |
+| System | macOS 15 Sequoia or newer, Apple silicon | Windows 10 (2004) or 11, x64 | Ubuntu 24.04 or newer or current Fedora, x64 or arm64; Arch Linux, x64 |
+| Installer | `Flock-<version>-macOS.dmg` | `Flock-Setup-<version>-x64.exe` | `.deb` or `.rpm` package, or `flockphp-bin` from the AUR |
+| App | Menu bar | Notification area (tray) | Window and top bar icon |
 
-Linux is on the roadmap.
+On Linux, Flock needs systemd-resolved as the system's DNS resolver (the default on Ubuntu and Fedora). The package names the command `flk`, because `/usr/bin/flock` is the system's file-locking tool; after setup, `flock` works too.
 
 Flock needs ports 80 and 443. If you use another local environment, stop it first. See [Installation](https://flockphp.com/docs/installation) for what setup changes on your system.
 
@@ -109,7 +109,7 @@ Then open [https://acme.test](https://acme.test). The [Quick start](https://floc
 
 ## Building from source
 
-Flock is a Go daemon and CLI (`cmd/flock`) with a native app on each system: SwiftUI on macOS (`macos/`) and WinUI 3 on Windows (`windows/`).
+Flock is a Go daemon and CLI (`cmd/flock`) with a native app on each system: SwiftUI on macOS (`macos/`), WinUI 3 on Windows (`windows/`) and GTK 4 with libadwaita, in Rust, on Linux (`linux/`).
 
 ```sh
 make build      # the CLI, into bin/flock
@@ -118,7 +118,7 @@ make lint
 make app        # the macOS app, into build/macos/Flock.app
 ```
 
-The Windows app is described in [windows/README.md](windows/README.md).
+The Windows app is described in [windows/README.md](windows/README.md). On Linux, `linux/build-packages.sh` builds the CLI and the app into `.deb` and `.rpm` packages (it needs Rust and the GTK 4, libadwaita and WebKitGTK 6 development packages).
 
 ## Contributing
 

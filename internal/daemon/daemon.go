@@ -101,6 +101,8 @@ type daemon struct {
 
 	mu       sync.Mutex
 	sites    []api.SiteStatus
+	proxies  []api.ProxyStatus
+	probe    serverProbe // what answers at the proxies' upstreams
 	warnings []string
 	problems map[string]string // why an installed catalog service isn't running, by id
 	// breakpoints finds PhpStorm breakpoints; breakpointSites is what the last reload found, by site path.
@@ -749,6 +751,36 @@ func (d *daemon) reload() error {
 		statuses = append(statuses, status)
 	}
 
+	// Proxied names pass every request to their own server. A site's name wins over a proxy's: they
+	// can only clash through a parked directory or a config edited by hand.
+	taken := map[string]bool{}
+	for _, name := range domains {
+		taken[name] = true
+	}
+	var proxies []api.ProxyStatus
+	for _, p := range cfg.Proxies {
+		domain := cfg.ProxyDomain(p)
+		status := api.ProxyStatus{Name: p.Name, Domain: domain, Upstream: p.Upstream, Secured: p.Secured}
+		if taken[domain] {
+			status.Problem = domain + " is served by a site of the same name"
+			proxies = append(proxies, status)
+			continue
+		}
+		ws := web.Site{Domain: domain, Proxy: p.Upstream}
+		scheme := "http"
+		if p.Secured {
+			scheme = "https"
+			if ws.CertFile, ws.KeyFile, err = ca.SiteCert(domain); err != nil {
+				return fmt.Errorf("certificate for %s: %w", domain, err)
+			}
+		}
+		status.URL = scheme + "://" + domain + portSuffix(scheme, cfg)
+		taken[domain] = true
+		webSites = append(webSites, ws)
+		domains = append(domains, domain)
+		proxies = append(proxies, status)
+	}
+
 	// Shares always go through the version's normal FastCGI pool, also for FrankenPHP sites: only
 	// FastCGI takes the per-request settings that keep a share safe (see web.Share).
 	var shares []web.Share
@@ -863,7 +895,7 @@ func (d *daemon) reload() error {
 	}
 
 	d.mu.Lock()
-	d.cfg, d.sites, d.warnings, d.problems, d.breakpointSites = cfg, statuses, warnings, problems, breakpoints
+	d.cfg, d.sites, d.proxies, d.warnings, d.problems, d.breakpointSites = cfg, statuses, proxies, warnings, problems, breakpoints
 	d.mu.Unlock()
 
 	go d.checkWildcard()
@@ -1018,6 +1050,12 @@ func (s pgService) Reload() error { return s.d.reload() }
 
 // Status implements api.Backend.
 func (d *daemon) Status() api.Status {
+	// Probed outside the lock: a dev server that doesn't answer takes a moment to say so.
+	d.mu.Lock()
+	served := d.proxies
+	d.mu.Unlock()
+	proxies := d.probe.live(d.root, served)
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -1026,6 +1064,7 @@ func (d *daemon) Status() api.Status {
 		PID:       os.Getpid(),
 		StartedAt: d.startedAt,
 		Sites:     d.withWorktrees(d.withShares(withBoost(d.liveSites()))),
+		Proxies:   proxies,
 		Processes: d.procs.Status(),
 		Warnings:  d.warnings,
 	}
